@@ -1,10 +1,14 @@
+// app/api/summarize/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { serverSupabase } from '@/lib/db';
 import { parsePdf } from '@/lib/pdf';
 import { openai } from '@/lib/openai';
 import { ensureQuotaAndIncrement } from '@/lib/rateLimit';
 
+// ВАЖНО: не даём Next пытаться предрендерить этот роут на билде
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
@@ -13,6 +17,7 @@ export async function POST(req: NextRequest) {
     const { data: { user }, error } = await sb.auth.getUser();
     if (error || !user) return new NextResponse('Unauthorized', { status: 401 });
 
+    // Лимит на количество использований (20)
     await ensureQuotaAndIncrement();
 
     const form = await req.formData();
