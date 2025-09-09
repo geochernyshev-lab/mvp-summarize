@@ -29,7 +29,9 @@ export default async function Dashboard() {
         <div className="small">
           Осталось загрузок: {quota ? Math.max(0, quota.limit - quota.used) : '20'}
         </div>
-        <UploadBox onDone={() => {}} />
+
+        <UploadBox />
+
         <h3>История</h3>
         <table className="table">
           <thead>
