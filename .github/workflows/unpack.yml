@@ -1,0 +1,28 @@
+name: Unpack ZIP into repo
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mvp-summarizer.zip'
+permissions:
+  contents: write
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Unzip project
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip
+          unzip -o mvp-summarizer.zip -d unpacked
+          shopt -s dotglob
+          mv -f unpacked/* .
+          rm -rf unpacked mvp-summarizer.zip
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add -A
+          git commit -m "Unpack ZIP into repo" || echo "Nothing to commit"
+          git push
