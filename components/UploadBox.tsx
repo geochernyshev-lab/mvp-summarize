@@ -1,11 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function UploadBox() {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -16,7 +14,7 @@ export default function UploadBox() {
     setMsg(null);
     setBusy(true);
     try {
-      const { data: { session} } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Сессия истекла. Войдите снова.');
 
@@ -31,13 +29,16 @@ export default function UploadBox() {
 
       if (!res.ok) throw new Error(await res.text());
 
-      router.refresh();
       setMsg('Готово! Конспект добавлен в историю ниже.');
+      // Сообщаем странице, что появилась новая запись
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('summary-added'));
+      }
     } catch (err: any) {
       setMsg(err?.message || 'Ошибка загрузки');
     } finally {
       setBusy(false);
-      e.target.value = '';
+      e.target.value = ''; // позволяем выбрать тот же файл ещё раз
     }
   }
 
