@@ -1,34 +1,18 @@
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Атомарно гарантирует наличие строки квоты и инкрементит used (если used < limit).
- * Нужны функции в БД:
- *  - ensure_quota_exists(uid uuid)
- *  - increment_quota(uid uuid) RETURNS TABLE (used int, "limit" int)
+ * Атомарно гарантирует наличие строки квоты и инкрементит used (если used < limit)
+ * Использует ПЕРЕДАННЫЙ (уже аутентифицированный) Supabase client.
  */
-export async function ensureQuotaAndIncrement() {
-  const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name: string) => cookieStore.get(name)?.value,
-        set() {},
-        remove() {}
-      }
-    }
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
+export async function ensureQuotaAndIncrement(sb: SupabaseClient) {
+  const { data: { user }, error } = await sb.auth.getUser();
   if (error || !user) throw new Error('UNAUTH');
 
   // Создаём строку квоты при первом обращении
-  await supabase.rpc('ensure_quota_exists', { uid: user.id });
+  await sb.rpc('ensure_quota_exists', { uid: user.id });
 
   // Атомарное увеличение на стороне Postgres
-  const { data, error: incErr } = await supabase.rpc('increment_quota', { uid: user.id });
+  const { data, error: incErr } = await sb.rpc('increment_quota', { uid: user.id });
   if (incErr) throw incErr;
   if (!data || (Array.isArray(data) && data.length === 0)) throw new Error('LIMIT_REACHED');
 
