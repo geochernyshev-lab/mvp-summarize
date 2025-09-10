@@ -1,4 +1,3 @@
-// app/api/summarize/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { parsePdf } from '@/lib/pdf';
@@ -11,14 +10,11 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 function serverSupabaseWithAuth(authHeader?: string) {
-  const supabase = createClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    authHeader
-      ? { global: { headers: { Authorization: authHeader } } }
-      : undefined
+    authHeader ? { global: { headers: { Authorization: authHeader } } } : undefined
   );
-  return supabase;
 }
 
 export async function POST(req: NextRequest) {
@@ -27,12 +23,10 @@ export async function POST(req: NextRequest) {
     const sb = serverSupabaseWithAuth(authHeader);
 
     const { data: { user }, error } = await sb.auth.getUser();
-    if (error || !user) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
+    if (error || !user) return new NextResponse('Unauthorized', { status: 401 });
 
-    // Проверяем/увеличиваем квоту
-    await ensureQuotaAndIncrement();
+    // Проверяем/увеличиваем квоту ИСПОЛЬЗУЯ ЭТОТ ЖЕ клиент
+    await ensureQuotaAndIncrement(sb);
 
     const form = await req.formData();
     const file = form.get('file') as File | null;
