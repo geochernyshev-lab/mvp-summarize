@@ -1,8 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/summarize/route.ts
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { parsePdf } from '@/lib/pdf';
 import { openai } from '@/lib/openai';
 import { ensureQuotaAndIncrement } from '@/lib/rateLimit';
+
+// --- ХАК: гасим случайное чтение dev-файла "./test/data/05-versions-space.pdf"
+import fs from 'fs';
+const __origReadFileSync = fs.readFileSync;
+fs.readFileSync = function patchedReadFileSync(path: any, ...args: any[]) {
+  try {
+    if (typeof path === 'string' && path.includes('/test/data/05-versions-space.pdf')) {
+      // возвращаем пустой PDF или пустой буфер — лишь бы не падало
+      return Buffer.from(''); // достаточно
+    }
+    // @ts-ignore
+    return __origReadFileSync.call(fs, path, ...args);
+  } catch (e: any) {
+    if (typeof path === 'string' && path.includes('/test/data/05-versions-space.pdf')) {
+      return Buffer.from('');
+    }
+    throw e;
+  }
+};
+// --- конец хака
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { data: { user }, error } = await sb.auth.getUser();
     if (error || !user) return new NextResponse('Unauthorized', { status: 401 });
 
-    // Лимит считаем строго для этого userId (без повторной auth внутри)
+    // Лимит строго для этого userId
     await ensureQuotaAndIncrement(sb, user.id);
 
     const form = await req.formData();
