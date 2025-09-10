@@ -16,17 +16,22 @@ export default function UploadBox() {
     setMsg(null);
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-
-      // Берём access token текущей сессии
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
+      if (!token) {
+        setMsg('Сессия истекла. Войдите снова.');
+        setBusy(false);
+        e.target.value = '';
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('file', file);
 
       const res = await fetch('/api/summarize', {
         method: 'POST',
         body: fd,
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
@@ -40,7 +45,6 @@ export default function UploadBox() {
       setMsg(err?.message || 'Ошибка загрузки');
     } finally {
       setBusy(false);
-      // позволяем выбрать тот же файл ещё раз
       e.target.value = '';
     }
   }
