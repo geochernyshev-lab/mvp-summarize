@@ -16,14 +16,9 @@ export default function UploadBox() {
     setMsg(null);
     setBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session} } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) {
-        setMsg('Сессия истекла. Войдите снова.');
-        setBusy(false);
-        e.target.value = '';
-        return;
-      }
+      if (!token) throw new Error('Сессия истекла. Войдите снова.');
 
       const fd = new FormData();
       fd.append('file', file);
@@ -34,10 +29,7 @@ export default function UploadBox() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(await res.text());
 
       router.refresh();
       setMsg('Готово! Конспект добавлен в историю ниже.');
@@ -54,12 +46,7 @@ export default function UploadBox() {
       <div className="small" style={{ marginBottom: 8 }}>
         Загрузите PDF (до 5 страниц, ~4.5MB)
       </div>
-      <input
-        type="file"
-        accept="application/pdf"
-        onChange={onChange}
-        disabled={busy}
-      />
+      <input type="file" accept="application/pdf" onChange={onChange} disabled={busy} />
       {busy && <div className="small" style={{ marginTop: 8 }}>Загружаю…</div>}
       {msg && <div className="small" style={{ marginTop: 8 }}>{msg}</div>}
     </div>
