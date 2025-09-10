@@ -43,9 +43,8 @@ export default function Dashboard() {
   async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      alert('Скопировано в буфер.');
     } catch {
-      alert('Не удалось скопировать.');
+      // noop
     }
   }
 
@@ -68,12 +67,12 @@ export default function Dashboard() {
       setQuota((q as any) ?? null);
 
       // История
-      const { data: rows, error: rowsErr } = await supabase
+      const { data: rows } = await supabase
         .from('summaries')
         .select('id, created_at, file_name, file_pages, file_bytes, summary')
         .order('created_at', { ascending: false })
         .limit(20);
-      if (!rowsErr) setSummaries((rows as any) ?? []);
+      setSummaries((rows as any) ?? []);
     } finally {
       setLoading(false);
     }
@@ -90,69 +89,61 @@ export default function Dashboard() {
     return (
       <div className="grid">
         <h2>Нужно войти</h2>
-        <div><a href="/login">Вход</a> · <a href="/signup">Регистрация</a></div>
+        <div className="muted">
+          <a className="btn ghost" href="/login">Вход</a>
+          &nbsp;
+          <a className="btn primary" href="/signup">Регистрация</a>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="grid">
-      <h2>Загрузка PDF</h2>
-      <div className="small">Осталось загрузок: {remaining}</div>
+      <div className="page-head">
+        <h1>Дашборд</h1>
+        <div className="chip">Осталось загрузок: <b>{remaining}</b></div>
+      </div>
 
       <UploadBox />
 
-      <h3>История</h3>
-      {loading ? (
-        <div className="small">Загружаю…</div>
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>Файл</th>
-              <th>Стр.</th>
-              <th>Размер</th>
-              <th>Конспект</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {summaries.length > 0 ? (
-              summaries.map((row) => {
-                const isOpen = openIds.has(row.id);
-                const short = row.summary.length > 220
-                  ? row.summary.slice(0, 220) + '…'
-                  : row.summary;
+      <h3 style={{ marginTop: 20, marginBottom: 8 }}>История</h3>
 
-                return (
-                  <tr key={row.id}>
-                    <td>{new Date(row.created_at).toLocaleString()}</td>
-                    <td>{row.file_name}</td>
-                    <td>{row.file_pages}</td>
-                    <td>{(row.file_bytes / 1024).toFixed(1)} KB</td>
-                    <td style={{ maxWidth: 420 }}>
-                      <div style={{ whiteSpace: 'pre-wrap' }}>
-                        {isOpen ? row.summary : short}
-                      </div>
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button onClick={() => toggle(row.id)}>
-                        {isOpen ? 'Скрыть' : 'Показать'}
-                      </button>
-                      &nbsp;
-                      <button onClick={() => copy(row.summary)}>Копировать</button>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={6} className="small">Пока пусто</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      {loading ? (
+        <div className="muted">Загружаю…</div>
+      ) : summaries.length === 0 ? (
+        <div className="muted">Пока пусто</div>
+      ) : (
+        <div className="cards">
+          {summaries.map((row) => {
+            const isOpen = openIds.has(row.id);
+            return (
+              <article className="summary-card" key={row.id}>
+                <div className="summary-meta">
+                  <div className="meta-title">{row.file_name}</div>
+                  <div className="meta-sub">
+                    <span>{new Date(row.created_at).toLocaleString()}</span>
+                    <span>•</span>
+                    <span>{row.file_pages} стр.</span>
+                    <span>•</span>
+                    <span>{(row.file_bytes / 1024).toFixed(1)} KB</span>
+                  </div>
+                </div>
+
+                <div className={`summary-body ${isOpen ? 'open' : 'collapsed'}`}>
+                  {row.summary}
+                </div>
+
+                <div className="summary-actions">
+                  <button className="btn ghost" onClick={() => toggle(row.id)}>
+                    {isOpen ? 'Скрыть' : 'Показать полностью'}
+                  </button>
+                  <button className="btn" onClick={() => copy(row.summary)}>Копировать</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       )}
     </div>
   );
