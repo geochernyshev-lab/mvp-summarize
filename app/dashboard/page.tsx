@@ -30,6 +30,7 @@ export default async function Dashboard() {
           Осталось загрузок: {quota ? Math.max(0, quota.limit - quota.used) : '20'}
         </div>
 
+        {/* ВАЖНО: без пропсов */}
         <UploadBox />
 
         <h3>История</h3>
