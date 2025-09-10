@@ -8,35 +8,19 @@ export default function Header() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // начальное состояние
-    supabase.auth.getSession().then(({ data }) => {
-      setAuthed(!!data.session);
-    });
-    // подписка на смену авторизации
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthed(!!session);
-    });
-    return () => {
-      sub.subscription.unsubscribe();
-    };
+    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setAuthed(!!s));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   async function logout() {
-    try {
-      setBusy(true);
-      await supabase.auth.signOut();
-      // после выхода — на главную
-      window.location.href = '/';
-    } finally {
-      setBusy(false);
-    }
+    try { setBusy(true); await supabase.auth.signOut(); window.location.href = '/'; }
+    finally { setBusy(false); }
   }
 
   return (
     <header className="site-header">
-      <a href="/" className="brand">PDF ➜ Конспект</a>
-
-      {/* Пока не знаем статус — ничего не рисуем, чтобы не мигало */}
+      <a href="/" className="brand">PDF → Конспект</a>
       {authed === null ? null : (
         <nav className="nav">
           {!authed ? (
@@ -45,9 +29,10 @@ export default function Header() {
               <a className="btn primary" href="/signup">Регистрация</a>
             </>
           ) : (
-            <button className="btn danger" onClick={logout} disabled={busy}>
-              {busy ? 'Выходим…' : 'Выйти'}
-            </button>
+            <>
+              <a className="btn ghost" href="/dashboard">Дашборд</a>
+              <button className="btn danger" onClick={logout} disabled={busy}>{busy ? 'Выходим…' : 'Выйти'}</button>
+            </>
           )}
         </nav>
       )}
