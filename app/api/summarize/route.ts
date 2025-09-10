@@ -1,23 +1,37 @@
 // app/api/summarize/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { serverSupabase } from '@/lib/db';
+import { createClient } from '@supabase/supabase-js';
 import { parsePdf } from '@/lib/pdf';
 import { openai } from '@/lib/openai';
 import { ensureQuotaAndIncrement } from '@/lib/rateLimit';
 
-// ВАЖНО: не даём Next пытаться предрендерить этот роут на билде
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
+function serverSupabaseWithAuth(authHeader?: string) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    authHeader
+      ? { global: { headers: { Authorization: authHeader } } }
+      : undefined
+  );
+  return supabase;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const sb = serverSupabase();
-    const { data: { user }, error } = await sb.auth.getUser();
-    if (error || !user) return new NextResponse('Unauthorized', { status: 401 });
+    const authHeader = req.headers.get('authorization') || undefined;
+    const sb = serverSupabaseWithAuth(authHeader);
 
-    // Лимит на количество использований (20)
+    const { data: { user }, error } = await sb.auth.getUser();
+    if (error || !user) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    // Проверяем/увеличиваем квоту
     await ensureQuotaAndIncrement();
 
     const form = await req.formData();
