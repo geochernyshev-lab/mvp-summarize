@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     const { data: { user }, error } = await sb.auth.getUser();
     if (error || !user) return new NextResponse('Unauthorized', { status: 401 });
 
-    // Проверяем/увеличиваем квоту ИСПОЛЬЗУЯ ЭТОТ ЖЕ клиент
-    await ensureQuotaAndIncrement(sb);
+    // Лимит считаем строго для этого userId (без повторной auth внутри)
+    await ensureQuotaAndIncrement(sb, user.id);
 
     const form = await req.formData();
     const file = form.get('file') as File | null;
