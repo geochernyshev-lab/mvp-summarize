@@ -1,17 +1,155 @@
-:root { --bg:#0b0b10; --card:#151522; --text:#e8e8f0; --muted:#9aa0b4; --accent:#6aa1ff; }
-*{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}
-a{color:var(--accent);text-decoration:none}
-input,button,textarea{background:#0f0f18;color:var(--text);border:1px solid #24243a;border-radius:10px;padding:10px 12px}
-button{cursor:pointer}
-.card{background:var(--card);border:1px solid #23233a;padding:16px;border-radius:14px}
-.grid{display:grid;gap:16px}
-.container{max-width:960px;margin:0 auto;padding:24px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
-h1,h2,h3{margin:0 0 12px}
-.small{color:var(--muted);font-size:12px}
-hr{border:0;border-top:1px solid #23233a;margin:16px 0}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{border-bottom:1px solid #23233a;padding:8px 6px;text-align:left}
-kbd{padding:2px 6px;border-radius:6px;background:#1c1c2e;border:1px solid #2a2a45}
+/* Базовые стили */
+:root {
+  --bg: #0b0c0f;
+  --panel: #111318;
+  --card: #131721;
+  --text: #e9ecf1;
+  --muted: #9aa3b2;
+  --primary: #4f7cff;
+  --danger: #ef476f;
+  --border: #1a1f2b;
+  --shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: linear-gradient(180deg, #0b0c0f 0%, #0d1016 100%);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--text); text-decoration: none; }
+a:hover { opacity: .9; }
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Шапка */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 16px;
+  background: linear-gradient(180deg, rgba(11,12,15,.95), rgba(11,12,15,.75));
+  backdrop-filter: blur(8px);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: .2px;
+}
+
+.nav { display: flex; gap: 8px; align-items: center; }
+
+/* Кнопки */
+.btn {
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid transparent;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:disabled { opacity: .6; cursor: default; }
+
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+.btn.danger {
+  background: var(--danger);
+}
+
+/* Заголовки и сетка */
+.grid { display: block; }
+h1, h2, h3 { margin: 0 0 10px; }
+.small { color: var(--muted); font-size: 13px; }
+.muted { color: var(--muted); }
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 14px;
+}
+.page-head h1 { font-size: 22px; }
+
+.chip {
+  background: rgba(79,124,255,.12);
+  color: #cdd9ff;
+  border: 1px solid rgba(79,124,255,.25);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+/* Карточки */
+.cards {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.summary-meta { margin-bottom: 8px; }
+.meta-title { font-weight: 700; }
+.meta-sub { color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; }
+
+/* Текст конспекта: свернут по умолчанию */
+.summary-body {
+  white-space: pre-wrap;
+  color: #e8ebf3;
+  font-size: 14px;
+}
+.summary-body.collapsed {
+  max-height: 6.5em;          /* ~4 строки */
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+}
+.summary-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Upload card (общий стиль карточки) */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+input[type="file"] {
+  width: 100%;
+  display: block;
+  background: #0f1218;
+  border: 1px dashed var(--border);
+  padding: 12px;
+  border-radius: 12px;
+  color: var(--muted);
+}
