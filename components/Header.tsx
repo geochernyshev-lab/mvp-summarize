@@ -1,10 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Header() {
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // начальное состояние
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthed(!!data.session);
+    });
+    // подписка на смену авторизации
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthed(!!session);
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
   async function logout() {
     try {
       setBusy(true);
@@ -17,16 +33,24 @@ export default function Header() {
   }
 
   return (
-    <header>
-      <a href="/" style={{ fontWeight: 600 }}>PDF ➜ Конспект</a>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/login">Вход</a>
-        <a href="/signup">Регистрация</a>
-        <button onClick={logout} disabled={busy} title="Выйти из аккаунта">
-          {busy ? 'Выходим…' : 'Выйти'}
-        </button>
-      </div>
+    <header className="site-header">
+      <a href="/" className="brand">PDF ➜ Конспект</a>
+
+      {/* Пока не знаем статус — ничего не рисуем, чтобы не мигало */}
+      {authed === null ? null : (
+        <nav className="nav">
+          {!authed ? (
+            <>
+              <a className="btn ghost" href="/login">Вход</a>
+              <a className="btn primary" href="/signup">Регистрация</a>
+            </>
+          ) : (
+            <button className="btn danger" onClick={logout} disabled={busy}>
+              {busy ? 'Выходим…' : 'Выйти'}
+            </button>
+          )}
+        </nav>
+      )}
     </header>
   );
 }
