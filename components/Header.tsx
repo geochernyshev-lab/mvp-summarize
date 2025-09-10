@@ -1,17 +1,32 @@
 'use client';
-import Link from 'next/link';
+
+import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Header() {
+  const [busy, setBusy] = useState(false);
+  async function logout() {
+    try {
+      setBusy(true);
+      await supabase.auth.signOut();
+      // после выхода — на главную
+      window.location.href = '/';
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <header>
-      <Link href="/"><strong>MVP Summarizer</strong></Link>
-      <nav style={{display:'flex', gap:12}}>
-        <Link href="/dashboard">Dashboard</Link>
-        <button onClick={async()=>{ await supabase.auth.signOut(); location.href='/'; }}>
-          Logout
+      <a href="/" style={{ fontWeight: 600 }}>PDF ➜ Конспект</a>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/login">Вход</a>
+        <a href="/signup">Регистрация</a>
+        <button onClick={logout} disabled={busy} title="Выйти из аккаунта">
+          {busy ? 'Выходим…' : 'Выйти'}
         </button>
-      </nav>
+      </div>
     </header>
   );
 }
