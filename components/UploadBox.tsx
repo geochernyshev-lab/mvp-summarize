@@ -15,9 +15,7 @@ export default function UploadBox() {
   const [result, setResult] = useState<ApiOut | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  function toggleMode(k: keyof Modes) {
-    setModes(v => ({ ...v, [k]: !v[k] }));
-  }
+  function toggleMode(k: keyof Modes) { setModes(v => ({ ...v, [k]: !v[k] })); }
 
   async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -34,7 +32,7 @@ export default function UploadBox() {
 
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('modes', JSON.stringify(modes)); // передаём выбор пользователя
+      fd.append('modes', JSON.stringify(modes));
 
       const res = await fetch('/api/summarize', {
         method: 'POST',
@@ -47,16 +45,39 @@ export default function UploadBox() {
       setResult(data);
       setOpen(true);
 
-      // Обновить историю/квоту
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('summary-added'));
-      }
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('summary-added'));
     } catch (err: any) {
       setMsg(err?.message || 'Ошибка загрузки');
     } finally {
       setBusy(false);
       e.target.value = '';
     }
+  }
+
+  async function downloadPart(id: string, kind: 'summary'|'terms'|'simple', fallbackName = 'result') {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { alert('Сессия истекла. Войдите снова.'); return; }
+
+    const res = await fetch(`/api/download?id=${id}&kind=${kind}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      alert(`Ошибка скачивания: ${t}`);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const base = (filename || fallbackName).replace(/\.[^.]+$/, '');
+    const title = kind === 'summary' ? 'Краткий конспект' : kind === 'terms' ? 'Термины' : 'Объясни просто';
+    a.download = `${base} - ${title}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -72,10 +93,12 @@ export default function UploadBox() {
       </div>
 
       <label className={`file-btn btn-xl ${busy ? 'disabled' : ''}`}>
-        <input type="file"
-               accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/jpg,image/png,image/heic,image/heif"
-               onChange={onChange}
-               disabled={busy} />
+        <input
+          type="file"
+          accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/jpg,image/png,image/heic,image/heif"
+          onChange={onChange}
+          disabled={busy}
+        />
         {busy ? 'Обрабатываю…' : 'Выбрать файл'}
       </label>
       {filename && <div className="small" style={{ marginTop: 8 }}>{filename}</div>}
@@ -88,7 +111,7 @@ export default function UploadBox() {
               <section className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h4 style={{ margin: 0 }}>Краткий конспект</h4>
-                  <a className="btn ghost" href={`/api/download?id=${result.id}&kind=summary`} target="_blank">Скачать PDF</a>
+                  <button className="btn ghost" onClick={() => downloadPart(result.id, 'summary', filename || 'document')}>Скачать PDF</button>
                 </div>
                 <div style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>{result.summary}</div>
               </section>
@@ -97,7 +120,7 @@ export default function UploadBox() {
               <section className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h4 style={{ margin: 0 }}>Термины</h4>
-                  <a className="btn ghost" href={`/api/download?id=${result.id}&kind=terms`} target="_blank">Скачать PDF</a>
+                  <button className="btn ghost" onClick={() => downloadPart(result.id, 'terms', filename || 'document')}>Скачать PDF</button>
                 </div>
                 <div style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>{result.terms}</div>
               </section>
@@ -106,7 +129,7 @@ export default function UploadBox() {
               <section className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h4 style={{ margin: 0 }}>Объясни просто</h4>
-                  <a className="btn ghost" href={`/api/download?id=${result.id}&kind=simple`} target="_blank">Скачать PDF</a>
+                  <button className="btn ghost" onClick={() => downloadPart(result.id, 'simple', filename || 'document')}>Скачать PDF</button>
                 </div>
                 <div style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>{result.simple}</div>
               </section>
