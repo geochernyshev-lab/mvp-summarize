@@ -1,44 +1,27 @@
 // middleware.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
 
-export async function middleware(req: NextRequest) {
-  // пробрасываем заголовки запроса в ответ (рекомендация Next/Supabase)
-  const res = NextResponse.next({ request: { headers: req.headers } });
+/**
+ * Защищаем только /dashboard.
+ * Проверяем наличие supabase cookie 'sb-access-token'.
+ * Если нет — отправляем на /login?next=/dashboard
+ */
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  // Клиент Supabase, привязанный к cookie в middleware
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      // Из-за несовпадений типов на разных версиях Next/Vercel явно приводим к any
-      cookies: {
-        get: (name: string) => req.cookies.get(name)?.value,
-        set: (name: string, value: string, options?: Parameters<typeof res.cookies.set>[2]) => {
-          res.cookies.set(name, value, options as any);
-        },
-        remove: (name: string, _options?: any) => {
-          res.cookies.delete(name);
-        },
-      } as any,
-    }
-  );
-
-  // Протект для /dashboard
-  if (req.nextUrl.pathname.startsWith('/dashboard')) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+  if (pathname.startsWith('/dashboard')) {
+    const hasAccess = req.cookies.has('sb-access-token');
+    if (!hasAccess) {
       const url = req.nextUrl.clone();
-      url.pathname = '/';
-      url.searchParams.set('auth', 'required');
+      url.pathname = '/login';
+      url.searchParams.set('next', pathname);
       return NextResponse.redirect(url);
     }
   }
 
-  return res;
+  return NextResponse.next();
 }
 
-// Применяем middleware только к кабинету
 export const config = {
   matcher: ['/dashboard/:path*'],
 };
