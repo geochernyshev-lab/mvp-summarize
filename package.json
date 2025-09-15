@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.2.0",
     "@supabase/ssr": "0.4.0",
     "@supabase/supabase-js": "2.45.4",
     "mammoth": "^1.6.0",
