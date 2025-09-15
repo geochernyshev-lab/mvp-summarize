@@ -2,36 +2,17 @@
 import Link from 'next/link';
 import { serverSupabase } from '@/lib/db';
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams?: { auth?: string };
-}) {
-  const authRequired = searchParams?.auth === 'required';
-
+export default async function Home() {
   const supabase = serverSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Куда ведёт большая CTA-кнопка
   const ctaHref = user ? '/dashboard' : '/login';
   const ctaText = user ? 'Перейти в кабинет' : 'Попробовать бесплатно';
 
   return (
     <main className="container">
-      {/* алерт авторизации, если middleware вернул ?auth=required */}
-      {authRequired && (
-        <div className="card warn mb-8">
-          <h2 className="h2">Нужна авторизация</h2>
-          <p className="muted">Пожалуйста, войдите или зарегистрируйтесь.</p>
-          <div className="row mt-4">
-            <Link href="/login" className="btn btn-primary">Войти</Link>
-            <Link href="/signup" className="btn btn-ghost">Регистрация</Link>
-          </div>
-        </div>
-      )}
-
       <section className="hero">
         <h1 className="display">
           Конспекты, термины и «объясни просто» за минуты
@@ -45,18 +26,15 @@ export default async function Home({
           <Link href={ctaHref} className="btn btn-primary btn-lg">
             {ctaText}
           </Link>
-
           {!user && (
-            <div className="row gap-sm">
+            <>
               <Link href="/login" className="btn btn-ghost">Войти</Link>
               <Link href="/signup" className="btn btn-ghost">Регистрация</Link>
-            </div>
+            </>
           )}
         </div>
 
-        <p className="muted mt-3">
-          Без сложных настроек. 5 страниц на файл, лимит по токенам.
-        </p>
+        <p className="muted mt-3">Без сложных настроек. 5 страниц на файл, лимит по токенам.</p>
       </section>
 
       <section className="features">
