@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import PDFDocument from 'pdfkit';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,11 +25,11 @@ export async function GET(req: NextRequest) {
     const authHeader = req.headers.get('authorization') || undefined;
     const sb = sbWithAuth(authHeader);
 
-    // Проверка авторизации
+    // Авторизация
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return new Response('Unauthorized', { status: 401 });
 
-    // Читаем РОВНО свою запись (RLS-дружелюбно)
+    // Читаем свою запись
     const { data, error } = await sb
       .from('summaries')
       .select('file_name, summary, terms, simple, created_at, user_id')
@@ -44,24 +44,47 @@ export async function GET(req: NextRequest) {
     const content = (data as any)[kind] as string | null;
     if (!content) return new Response('Пусто', { status: 400 });
 
-    // Генерация PDF на лету
-    const doc = new PDFDocument({ margin: 40 });
-    const chunks: Buffer[] = [];
-    doc.on('data', (c) => chunks.push(c as Buffer));
-    doc.on('error', (e) => console.error('pdfkit error', e));
+    // === Генерация PDF через pdf-lib (без внешних файлов) ===
+    const pdfDoc = await PDFDocument.create();
+    // A4
+    const pageSize: [number, number] = [595.28, 841.89];
+    const margin = 40;
 
-    doc.fontSize(16).text(title, { align: 'left' }).moveDown(0.5);
-    doc.fontSize(11).fillColor('#666')
-       .text(new Date(data.created_at).toLocaleString())
-       .fillColor('#000').moveDown();
-    doc.fontSize(12).text(content, { align: 'left' });
-    doc.end();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    await new Promise(res => doc.on('end', res));
-    const pdf = Buffer.concat(chunks);
+    let page = pdfDoc.addPage(pageSize);
+    let { width, height } = page.getSize();
+    let x = margin;
+    let y = height - margin;
 
+    const dateStr = new Date(data.created_at).toLocaleString('ru-RU');
+
+    // Заголовок
+    y = drawLine(page, fontBold, 16, title, x, y, width - margin * 2) - 6;
+    // Дата
+    y = drawLine(page, font, 11, dateStr, x, y, width - margin * 2, { color: rgb(0.4, 0.4, 0.4) }) - 8;
+
+    // Основной текст (многострочно с переносами и переносом на новую страницу)
+    const bodyFontSize = 12;
+    const bodyLines = wrapText(content, font, bodyFontSize, width - margin * 2);
+    const lineHeight = bodyFontSize * 1.35;
+
+    for (const line of bodyLines) {
+      if (y - lineHeight < margin) {
+        // новая страница
+        page = pdfDoc.addPage(pageSize);
+        ({ width, height } = page.getSize());
+        x = margin;
+        y = height - margin;
+      }
+      page.drawText(line, { x, y, size: bodyFontSize, font, color: rgb(0, 0, 0) });
+      y -= lineHeight;
+    }
+
+    const bytes = await pdfDoc.save();
     const safeName = sanitize(`${data.file_name} - ${title}.pdf`);
-    return new Response(pdf, {
+    return new Response(bytes, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -75,6 +98,76 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// helpers
+
 function sanitize(s: string) {
   return s.replace(/[^\w\-. ]+/g, '_').slice(0, 120);
+}
+
+// Рисуем одну строку текста и возвращаем новую координату Y
+function drawLine(
+  page: any,
+  font: any,
+  size: number,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  opts: { color?: any } = {}
+) {
+  const color = opts.color ?? rgb(0, 0, 0);
+  const lines = wrapText(text, font, size, maxWidth);
+  const lineHeight = size * 1.35;
+  for (const line of lines) {
+    page.drawText(line, { x, y, size, font, color });
+    y -= lineHeight;
+  }
+  return y;
+}
+
+// Грубое слово-по-слову перенесение текста по ширине
+function wrapText(text: string, font: any, size: number, maxWidth: number): string[] {
+  const words = (text || '').split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+
+  for (const w of words) {
+    const tentative = line ? `${line} ${w}` : w;
+    const width = font.widthOfTextAtSize(tentative, size);
+    if (width <= maxWidth) {
+      line = tentative;
+    } else {
+      if (line) lines.push(line);
+      // если одно слово шире строки — тупо режем
+      if (font.widthOfTextAtSize(w, size) > maxWidth) {
+        const chunks = hardWrap(w, font, size, maxWidth);
+        if (chunks.length) {
+          lines.push(...chunks.slice(0, -1));
+          line = chunks[chunks.length - 1];
+        } else {
+          line = w;
+        }
+      } else {
+        line = w;
+      }
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function hardWrap(word: string, font: any, size: number, maxWidth: number): string[] {
+  const out: string[] = [];
+  let buf = '';
+  for (const ch of word) {
+    const tentative = buf + ch;
+    if (font.widthOfTextAtSize(tentative, size) <= maxWidth) {
+      buf = tentative;
+    } else {
+      if (buf) out.push(buf);
+      buf = ch;
+    }
+  }
+  if (buf) out.push(buf);
+  return out;
 }
