@@ -11,11 +11,12 @@ type Row = {
   file_name: string;
   file_pages: number | null;
   file_bytes: number;
-  file_type: string | null;
+  file_type: string | null;  // 'pdf' | 'docx' | 'image' | ...
   summary: string | null;
   terms: string | null;
   simple: string | null;
 };
+
 type QuotaRow = { user_id: string; used: number; limit: number };
 
 export default function Dashboard() {
@@ -36,16 +37,31 @@ export default function Dashboard() {
 
   async function downloadPart(id: string, kind: 'summary'|'terms'|'simple', name: string) {
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token; if (!token) { router.replace('/login'); return; }
-    const res = await fetch(`/api/download?id=${id}&kind=${kind}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) { alert('Ошибка скачивания'); return; }
+    const token = session?.access_token; 
+    if (!token) { router.replace('/login'); return; }
+
+    const res = await fetch(`/api/download?id=${id}&kind=${kind}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) { alert(`Ошибка скачивания: ${res.status}`); return; }
+
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const base = (name || 'document').replace(/\.[^.]+$/, '');
-    const title = kind === 'summary' ? 'Краткий конспект' : kind === 'terms' ? 'Термины' : 'Объясни просто';
-    a.href = url; a.download = `${base} - ${title}.pdf`; a.click();
-    URL.revokeObjectURL(url);
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      window.open(url, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      const base = (name || 'document').replace(/\.[^.]+$/, '');
+      const title = kind === 'summary' ? 'Краткий конспект' : kind === 'terms' ? 'Термины' : 'Объясни просто';
+      a.download = `${base} - ${title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
   }
 
   async function load() {
@@ -53,12 +69,18 @@ export default function Dashboard() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
-      const { data: q } = await supabase.from('user_quotas').select('user_id, used, "limit"').eq('user_id', user.id).maybeSingle();
+      const { data: q } = await supabase
+        .from('user_quotas')
+        .select('user_id, used, "limit"')
+        .eq('user_id', user.id)
+        .maybeSingle();
       setQuota((q as any) ?? null);
+
       const { data: rs } = await supabase
         .from('summaries')
         .select('id, created_at, file_name, file_pages, file_bytes, file_type, summary, terms, simple')
-        .order('created_at', { ascending: false }).limit(20);
+        .order('created_at', { ascending: false })
+        .limit(20);
       setRows((rs as any) ?? []);
     } finally { setLoading(false); }
   }
@@ -113,8 +135,12 @@ export default function Dashboard() {
                     <div className="small" style={{ marginBottom: 6 }}>Краткий конспект</div>
                     <div className={`summary-body ${open ? '' : 'clamped'}`}>{row.summary}</div>
                     <div className="summary-actions">
-                      <button className="btn ghost" onClick={() => toggle(row.id)}>{open ? 'Скрыть' : 'Развернуть'}</button>
-                      <button className="btn" onClick={() => downloadPart(row.id, 'summary', row.file_name)}>Скачать PDF</button>
+                      <button className="btn ghost" onClick={() => toggle(row.id)}>
+                        {open ? 'Скрыть' : 'Развернуть'}
+                      </button>
+                      <button className="btn" onClick={() => downloadPart(row.id, 'summary', row.file_name)}>
+                        Скачать PDF
+                      </button>
                       <button className="btn ghost" onClick={() => copy(row.summary!)}>Копировать</button>
                     </div>
                   </section>
@@ -125,8 +151,12 @@ export default function Dashboard() {
                     <div className="small" style={{ marginBottom: 6 }}>Термины</div>
                     <div className={`summary-body ${open ? '' : 'clamped'}`}>{row.terms}</div>
                     <div className="summary-actions">
-                      <button className="btn ghost" onClick={() => toggle(row.id)}>{open ? 'Скрыть' : 'Развернуть'}</button>
-                      <button className="btn" onClick={() => downloadPart(row.id, 'terms', row.file_name)}>Скачать PDF</button>
+                      <button className="btn ghost" onClick={() => toggle(row.id)}>
+                        {open ? 'Скрыть' : 'Развернуть'}
+                      </button>
+                      <button className="btn" onClick={() => downloadPart(row.id, 'terms', row.file_name)}>
+                        Скачать PDF
+                      </button>
                       <button className="btn ghost" onClick={() => copy(row.terms!)}>Копировать</button>
                     </div>
                   </section>
@@ -137,8 +167,12 @@ export default function Dashboard() {
                     <div className="small" style={{ marginBottom: 6 }}>Объясни просто</div>
                     <div className={`summary-body ${open ? '' : 'clamped'}`}>{row.simple}</div>
                     <div className="summary-actions">
-                      <button className="btn ghost" onClick={() => toggle(row.id)}>{open ? 'Скрыть' : 'Развернуть'}</button>
-                      <button className="btn" onClick={() => downloadPart(row.id, 'simple', row.file_name)}>Скачать PDF</button>
+                      <button className="btn ghost" onClick={() => toggle(row.id)}>
+                        {open ? 'Скрыть' : 'Развернуть'}
+                      </button>
+                      <button className="btn" onClick={() => downloadPart(row.id, 'simple', row.file_name)}>
+                        Скачать PDF
+                      </button>
                       <button className="btn ghost" onClick={() => copy(row.simple!)}>Копировать</button>
                     </div>
                   </section>
