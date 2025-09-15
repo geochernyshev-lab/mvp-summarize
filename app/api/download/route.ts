@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return new Response('Unauthorized', { status: 401 });
 
-    // Читаем только свою запись
+    // Запись только владельца
     const { data, error } = await sb
       .from('summaries')
       .select('file_name, summary, terms, simple, created_at, user_id')
@@ -44,21 +45,21 @@ export async function GET(req: NextRequest) {
     const content = (data as any)[kind] as string | null;
     if (!content) return new Response('Пусто', { status: 400 });
 
-    // === Генерация PDF с кириллическим TTF из public/ ===
+    // === PDF с кириллицей: регистрируем fontkit и встраиваем TTF из /public/fonts ===
     const pdfDoc = await PDFDocument.create();
-    const pageSize: [number, number] = [595.28, 841.89]; // A4
-    const margin = 40;
+    pdfDoc.registerFontkit(fontkit); // <- ВАЖНО
 
-    // ВАЖНО: шрифт физически лежит в public/fonts/DejaVuSans.ttf в вашем деплое
     const origin = `${url.protocol}//${url.host}`;
-    const fontUrl = `${origin}/fonts/DejaVuSans.ttf`;
+    const fontUrl = `${origin}/fonts/DejaVuSans.ttf`; // файл лежит в public/fonts/DejaVuSans.ttf
     const fontBytes = await fetch(fontUrl).then(r => {
       if (!r.ok) throw new Error('Font not found');
       return r.arrayBuffer();
     });
+    const font = await pdfDoc.embedFont(new Uint8Array(fontBytes), { subset: true });
 
-    const font = await pdfDoc.embedFont(new Uint8Array(fontBytes)); // универсальный TTF с кириллицей
-
+    // Макет A4
+    const pageSize: [number, number] = [595.28, 841.89];
+    const margin = 40;
     let page = pdfDoc.addPage(pageSize);
     let { width, height } = page.getSize();
     let x = margin;
@@ -66,12 +67,11 @@ export async function GET(req: NextRequest) {
 
     const dateStr = new Date(data.created_at).toLocaleString('ru-RU');
 
-    // Заголовок
+    // Заголовок и дата
     y = drawWrapped(page, font, 16, title, x, y, width - margin * 2, { color: rgb(0,0,0) }) - 6;
-    // Дата
     y = drawWrapped(page, font, 11, dateStr, x, y, width - margin * 2, { color: rgb(0.4,0.4,0.4) }) - 8;
 
-    // Основной текст
+    // Текст
     const bodySize = 12;
     const lines = wrapText(content, font, bodySize, width - margin * 2);
     const lineHeight = bodySize * 1.35;
@@ -99,18 +99,14 @@ export async function GET(req: NextRequest) {
     });
   } catch (e:any) {
     console.error(e);
-    // Дадим более понятную ошибку, если шрифт не нашли
     if (String(e?.message || e).includes('Font not found')) {
-      return new Response('Не найден шрифт /fonts/DejaVuSans.ttf. Загрузите TTF с кириллицей в public/fonts.', { status: 500 });
-    }
-    if (String(e).includes('WinAnsi')) {
-      return new Response('Шрифт не поддерживает кириллицу. Используйте TTF с кириллицей в public/fonts.', { status: 500 });
+      return new Response('Не найден шрифт /public/fonts/DejaVuSans.ttf. Загрузите TTF с кириллицей.', { status: 500 });
     }
     return new Response('Internal Error', { status: 500 });
   }
 }
 
-// ===== helpers =====
+// helpers
 function sanitize(s: string) {
   return s.replace(/[^\w\-. ]+/g, '_').slice(0, 120);
 }
@@ -119,7 +115,6 @@ function wrapText(text: string, font: any, size: number, maxWidth: number): stri
   const words = (text || '').split(/\s+/);
   const lines: string[] = [];
   let line = '';
-
   for (const w of words) {
     const tentative = line ? `${line} ${w}` : w;
     const width = font.widthOfTextAtSize(tentative, size);
@@ -127,7 +122,6 @@ function wrapText(text: string, font: any, size: number, maxWidth: number): stri
       line = tentative;
     } else {
       if (line) lines.push(line);
-      // если слово шире строки — режем на части
       if (font.widthOfTextAtSize(w, size) > maxWidth) {
         const chunks = hardWrap(w, font, size, maxWidth);
         if (chunks.length) {
