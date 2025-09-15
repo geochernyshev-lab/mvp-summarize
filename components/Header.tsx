@@ -1,44 +1,42 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+// components/Header.tsx
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
+import { serverSupabase } from '@/lib/db';
+import { redirect } from 'next/navigation';
 
-export default function Header() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
+export default async function Header() {
+  const supabase = serverSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setAuthed(!!s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  async function logout() {
-    try { setBusy(true); await supabase.auth.signOut(); window.location.replace('/'); }
-    finally { setBusy(false); }
+  async function signOut() {
+    'use server';
+    const sb = serverSupabase();
+    await sb.auth.signOut();
+    redirect('/');
   }
 
   return (
-    <header className="site-header">
-      <Link href="/" className="brand">Антиучебник</Link>
-      {authed === null ? null : (
+    <header className="header">
+      <div className="container header__row">
+        <Link href="/" className="brand" aria-label="На главную">Антиучебник</Link>
+
         <nav className="nav">
-          {!authed ? (
+          {!user && (
             <>
-              <Link className="btn ghost" href="/login">Вход</Link>
-              <Link className="btn primary" href="/signup">Регистрация</Link>
+              <Link href="/login" className="btn btn--ghost">Войти</Link>
+              <Link href="/signup" className="btn btn--primary">Регистрация</Link>
             </>
-          ) : (
+          )}
+
+          {user && (
             <>
-              <Link className="btn ghost" href="/dashboard">Дашборд</Link>
-              <button className="btn danger" onClick={logout} disabled={busy}>
-                {busy ? 'Выходим…' : 'Выйти'}
-              </button>
+              <Link href="/dashboard" className="btn btn--ghost">Дашборд</Link>
+              <form action={signOut}>
+                <button type="submit" className="btn btn--danger">Выйти</button>
+              </form>
             </>
           )}
         </nav>
-      )}
+      </div>
     </header>
   );
 }
