@@ -7,7 +7,7 @@ import { ensureQuotaAndIncrement } from '@/lib/rateLimit';
 import { openai } from '@/lib/openai';
 import fs from 'fs';
 
-// страховка от старого dev-кода Next (не влияет на прод)
+// Защита от старых dev-вызовов Next
 const __origReadFileSync: any = (fs as any).readFileSync;
 (fs as any).readFileSync = function patchedReadFileSync(path: any, ...args: any[]) {
   try {
@@ -34,25 +34,39 @@ function sbWithAuth(authHeader?: string) {
   );
 }
 
+// >>> единое правило лимита страниц:
+// PDF: фактические страницы из парсера
+// DOCX: считаем 500 слов = 1 страница (округляем вверх)
+// Изображения: считаем 1 страницу
+function estimatePages(mime: string, processed: any): number {
+  if (mime === 'application/pdf') return Math.max(0, processed.pages ?? 0);
+  if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const words = (processed.text || '').trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.ceil(words / 500));
+  }
+  if (mime.startsWith('image/')) return 1;
+  return 0;
+}
+
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || undefined;
   const sb = sbWithAuth(authHeader);
 
   try {
-    // 1) авторизация пользователя
+    // 1) авторизация
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return new NextResponse('Unauthorized', { status: 401 });
 
-    // 2) квота (20 загрузок)
+    // 2) квота
     await ensureQuotaAndIncrement(sb, user.id);
 
-    // 3) принимаем файл и режимы
+    // 3) файл + режимы
     const form = await req.formData();
     const file = form.get('file') as File | null;
     const modesRaw = form.get('modes') as string | null;
     if (!file) return new NextResponse('No file', { status: 400 });
 
-    const mime = file.type;
+    let mime = file.type;
     const supported = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -66,19 +80,24 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const processed = await processFile(buffer, mime);
 
-    // 4) ЛИМИТ ТОЛЬКО ДЛЯ PDF
-    if (mime === 'application/pdf') {
-      const pages = (processed as any).pages || 0;
-      if (pages > 5) return new NextResponse('PDF должен содержать не более 5 страниц', { status: 400 });
+    // 4) ЛИМИТ 5 страниц для всех типов
+    const pages = estimatePages(mime, processed);
+    if (pages > 5) {
+      return new NextResponse(
+        mime === 'application/pdf'
+          ? 'PDF должен содержать не более 5 страниц'
+          : 'Файл эквивалентен более чем 5 страницам (для DOCX считаем 500 слов = 1 стр.; изображения = 1 стр.)',
+        { status: 400 }
+      );
     }
 
-    // 5) какие выдачи хотел юзер
+    // 5) выбор выдач
     let want = { summary: true, terms: false, simple: false };
     if (modesRaw) { try { want = { ...want, ...JSON.parse(modesRaw) }; } catch {} }
-    const keys = Object.entries(want).filter(([,v])=>v).map(([k])=>k);
-    if (keys.length === 0) keys.push('summary');
+    const keys = (Object.entries(want).filter(([,v])=>v).map(([k])=>k));
+    if (!keys.length) keys.push('summary');
 
-    // 6) подсказки для модели
+    // 6) подготовка сообщений
     const system = `You are an expert study assistant. Output must be in the document's language.
 Return ONLY JSON with possible keys among: "summary", "terms", "simple".
 - "summary": concise gist (6–10 bullets or tight paragraph)
@@ -105,10 +124,10 @@ No external facts. Keep names/numbers.`;
     let out = { summary: undefined, terms: undefined, simple: undefined } as any;
     try {
       const resp = await openai.chat.completions.create({
-        model: MODEL, temperature: 0.2, response_format: { type: 'json_object' as any }, messages,
+        model: MODEL, temperature: 0.2, response_format: { type: 'json_object' as any }, messages
       });
       out = JSON.parse(resp.choices[0]?.message?.content?.trim() || '{}');
-    } catch (e) {
+    } catch {
       const resp = await openai.chat.completions.create({ model: MODEL, temperature: 0.2, messages });
       out = safeJSON(resp.choices[0]?.message?.content?.trim() || '');
     }
@@ -119,20 +138,21 @@ No external facts. Keep names/numbers.`;
 
     if (!summary && !terms && !simple) return new NextResponse('Пустой ответ модели', { status: 502 });
 
-    // 8) вставка строки истории
+    // 8) запись в БД
+    const fileType =
+      mime === 'application/pdf' ? 'pdf' :
+      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'docx' : 'image';
+
     const { data: inserted, error: insErr } = await sb.from('summaries').insert({
       user_id: user.id,
       file_name: (file as any).name || 'document',
-      file_pages: mime === 'application/pdf' ? ((processed as any).pages ?? null) : null,
+      file_pages: pages,
       file_bytes: buffer.byteLength,
-      file_type: mime === 'application/pdf' ? 'pdf'
-               : mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'docx'
-               : 'image',
+      file_type: fileType,
       summary, terms, simple
     }).select('id').single();
 
     if (insErr) {
-      // вернём текст ошибки для диагностики
       return NextResponse.json({ error: 'DB insert error', details: insErr.message || insErr }, { status: 500 });
     }
 
