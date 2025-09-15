@@ -1,37 +1,30 @@
 // components/Header.tsx
 import Link from 'next/link';
 import { serverSupabase } from '@/lib/db';
-import { redirect } from 'next/navigation';
 
 export default async function Header() {
   const supabase = serverSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  async function signOut() {
-    'use server';
-    const sb = serverSupabase();
-    await sb.auth.signOut();
-    redirect('/');
-  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
-    <header className="header">
-      <div className="container header__row">
-        <Link href="/" className="brand" aria-label="На главную">Антиучебник</Link>
+    <header className="site-header">
+      <div className="container header-inner">
+        <Link href="/" className="logo">Антиучебник</Link>
 
         <nav className="nav">
-          {!user && (
+          {!user ? (
             <>
-              <Link href="/login" className="btn btn--ghost">Войти</Link>
-              <Link href="/signup" className="btn btn--primary">Регистрация</Link>
+              <Link href="/login" className="btn btn-ghost">Войти</Link>
+              <Link href="/signup" className="btn btn-primary">Регистрация</Link>
             </>
-          )}
-
-          {user && (
+          ) : (
             <>
-              <Link href="/dashboard" className="btn btn--ghost">Дашборд</Link>
-              <form action={signOut}>
-                <button type="submit" className="btn btn--danger">Выйти</button>
+              <Link href="/dashboard" className="btn btn-ghost">Дашборд</Link>
+              {/* простой выход через API-роут, если он у вас уже есть; если нет — позже добавим */}
+              <form action="/api/logout" method="post" className="inline">
+                <button type="submit" className="btn btn-danger">Выйти</button>
               </form>
             </>
           )}
