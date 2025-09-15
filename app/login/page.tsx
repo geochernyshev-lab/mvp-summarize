@@ -1,21 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState(''); const [pass, setPass] = useState('');
-  const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string|null>(null);
+  const [email, setEmail] = useState(''); 
+  const [pass, setPass] = useState('');
+  const [busy, setBusy] = useState(false); 
+  const [msg, setMsg] = useState<string|null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) window.location.replace('/dashboard');
+      else setChecking(false);
+    });
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault(); setMsg(null); setBusy(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
       if (error) throw error;
-      window.location.href = '/dashboard';
+      window.location.replace('/dashboard');
     } catch (err:any) { setMsg(err?.message || 'Ошибка входа'); }
     finally { setBusy(false); }
   }
+
+  if (checking) return <div className="splash" />;
 
   return (
     <div className="auth-wrap">
